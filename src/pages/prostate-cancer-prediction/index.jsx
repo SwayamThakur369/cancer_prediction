@@ -7,54 +7,43 @@ import Icon from '../../components/AppIcon';
 import PredictionForm from './components/PredictionForm';
 import ResultDisplay from './components/ResultDisplay';
 import InfoPanel from './components/InfoPanel';
+import mlService from '../../services/mlService';
 
 const ProstateCancerPrediction = () => {
   const [predictionResult, setPredictionResult] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const handlePrediction = async (formData) => {
     setIsLoading(true);
+    setError(null);
 
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+      // Make prediction using real API
+      const response = await mlService.predict('prostate', formData);
+      
+      if (response.success && response.prediction) {
+        // Convert prediction to risk percentage format
+        const riskPercentage = response.prediction.prediction_code === 1 ? 85 : 15;
+        
+        const result = {
+          prediction: response.prediction.prediction,
+          confidence: response.prediction.confidence,
+          riskPercentage: riskPercentage,
+          timestamp: new Date().toISOString(),
+          modelInfo: response.prediction.model_info
+        };
 
-    const age = parseFloat(formData?.age);
-    const psa = parseFloat(formData?.psa);
-    const psaDensity = parseFloat(formData?.psaDensity);
-    const gleason = parseFloat(formData?.gleason);
-    const dre = parseFloat(formData?.dre);
-    const familyHistory = parseFloat(formData?.familyHistory);
-
-    let riskScore = 0;
-
-    if (age >= 70) riskScore += 25;
-    else if (age >= 60) riskScore += 20;
-    else if (age >= 50) riskScore += 15;
-    else riskScore += 10;
-
-    if (psa >= 10) riskScore += 30;
-    else if (psa >= 4) riskScore += 20;
-    else if (psa >= 2.5) riskScore += 10;
-    else riskScore += 5;
-
-    if (psaDensity >= 0.15) riskScore += 15;
-    else if (psaDensity >= 0.10) riskScore += 10;
-    else riskScore += 5;
-
-    if (gleason >= 8) riskScore += 20;
-    else if (gleason >= 7) riskScore += 15;
-    else riskScore += 5;
-
-    if (dre === 1) riskScore += 15;
-    if (familyHistory === 1) riskScore += 10;
-
-    const finalRisk = Math.min(Math.max(riskScore, 5), 95);
-
-    setPredictionResult({
-      riskPercentage: finalRisk,
-      timestamp: new Date()?.toISOString()
-    });
-
-    setIsLoading(false);
+        setPredictionResult(result);
+      } else {
+        throw new Error('Invalid prediction response');
+      }
+    } catch (err) {
+      console.error('Prediction error:', err);
+      setError(err.message || 'Failed to make prediction. Please ensure the model is trained and backend is running.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleNewPrediction = () => {
@@ -120,6 +109,18 @@ const ProstateCancerPrediction = () => {
                     </div>
                   </div>
 
+                  {error && (
+                    <div className="bg-error/10 border border-error/20 rounded-lg p-4 mb-6">
+                      <div className="flex items-start">
+                        <Icon name="AlertCircle" size={20} className="text-error mr-3 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1">
+                          <h3 className="text-base font-semibold text-error mb-1">Prediction Error</h3>
+                          <p className="text-sm text-error/80">{error}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
                   {!predictionResult ? (
                     <PredictionForm onSubmit={handlePrediction} isLoading={isLoading} />
                   ) : (

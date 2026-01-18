@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer';
@@ -8,38 +8,58 @@ import ResultDisplay from './components/ResultDisplay';
 import InfoCard from './components/InfoCard';
 import MedicalDisclaimer from './components/MedicalDisclaimer';
 import ModelInfoSection from './components/ModelInfoSection';
+import mlService from '../../services/mlService';
 
 const BreastCancerPrediction = () => {
   const [predictionResult, setPredictionResult] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [modelStatus, setModelStatus] = useState(null);
 
-  const handlePrediction = (formData) => {
+  useEffect(() => {
+    // Check model status on component mount
+    checkModelStatus();
+  }, []);
+
+  const checkModelStatus = async () => {
+    try {
+      const statusResponse = await mlService.getModelStatus('breast');
+      setModelStatus(statusResponse.status);
+    } catch (error) {
+      console.error('Error checking model status:', error);
+    }
+  };
+
+  const handlePrediction = async (formData) => {
     setIsLoading(true);
+    setError(null);
 
-    setTimeout(() => {
-      const mockPredictions = [
-        { prediction: 'Benign', confidence: 94.3 },
-        { prediction: 'Benign', confidence: 87.6 },
-        { prediction: 'Malignant', confidence: 91.8 },
-        { prediction: 'Malignant', confidence: 88.2 },
-        { prediction: 'Benign', confidence: 96.1 }
-      ];
-
-      const randomResult = mockPredictions?.[Math.floor(Math.random() * mockPredictions?.length)];
+    try {
+      // Make prediction using real API
+      const response = await mlService.predict('breast', formData);
       
-      const result = {
-        ...randomResult,
-        timestamp: new Date()?.toISOString(),
-        inputData: formData
-      };
+      if (response.success && response.prediction) {
+        const result = {
+          ...response.prediction,
+          timestamp: new Date().toISOString(),
+          inputData: formData
+        };
 
-      setPredictionResult(result);
+        setPredictionResult(result);
+
+        // Save to localStorage for history
+        const existingResults = JSON.parse(localStorage.getItem('breastCancerPredictions') || '[]');
+        existingResults.unshift(result);
+        localStorage.setItem('breastCancerPredictions', JSON.stringify(existingResults.slice(0, 50)));
+      } else {
+        throw new Error('Invalid prediction response');
+      }
+    } catch (err) {
+      console.error('Prediction error:', err);
+      setError(err.message || 'Failed to make prediction. Please ensure the model is trained and backend is running.');
+    } finally {
       setIsLoading(false);
-
-      const existingResults = JSON.parse(localStorage.getItem('breastCancerPredictions') || '[]');
-      existingResults?.unshift(result);
-      localStorage.setItem('breastCancerPredictions', JSON.stringify(existingResults?.slice(0, 50)));
-    }, 2000);
+    }
   };
 
   const handleNewPrediction = () => {

@@ -281,18 +281,38 @@ const LungCancerPrediction = () => {
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      let riskScore = calculateRiskScore();
-      setPredictionResult({
-        riskScore,
-        timestamp: new Date()?.toISOString(),
-        modelVersion: 'Random Forest v2.1',
-        confidence: 94.2
-      });
-      setShowResult(true);
+    try {
+      // Combine all form data for prediction
+      const combinedData = {
+        ...formData,
+        ...smokingData,
+        ...progressionData
+      };
+
+      // Make prediction using real API
+      const mlService = (await import('../../services/mlService')).default;
+      const response = await mlService.predict('lung', combinedData);
+      
+      if (response.success && response.prediction) {
+        const result = {
+          ...response.prediction,
+          riskScore: response.prediction.prediction_code === 1 ? 85 : 15,
+          timestamp: new Date().toISOString(),
+          modelVersion: response.prediction.model_type || 'Random Forest v2.1'
+        };
+        
+        setPredictionResult(result);
+        setShowResult(true);
+      } else {
+        throw new Error('Invalid prediction response');
+      }
+    } catch (error) {
+      console.error('Prediction error:', error);
+      alert('Prediction failed: ' + (error.message || 'Please ensure the model is trained and backend is running.'));
+    } finally {
       setIsSubmitting(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 2000);
+    }
   };
 
   const handleNewPrediction = () => {
